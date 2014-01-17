@@ -9,7 +9,7 @@ if ( false === include_once( config_get( 'plugin_path' ) . 'Source/MantisSourceP
 
 require_once( config_get( 'core_path' ) . 'url_api.php' );
 
-class SourceGitwebPlugin extends MantisSourcePlugin {
+class SourceGitSSLPlugin extends MantisSourcePlugin {
 	public function register() {
 		$this->name = plugin_lang_get( 'title' );
 		$this->description = plugin_lang_get( 'description' );
@@ -20,15 +20,15 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 			'Source' => '0.16',
 		);
 
-		$this->author = 'John Reese';
-		$this->contact = 'john@noswap.com';
-		$this->url = 'http://noswap.com';
+		$this->author = 'Brion Swanson';
+		$this->contact = 'brion@alum.rit.edu';
+		$this->url = 'https://github.com/brions/source-integration';
 	}
 
-	public $type = 'gitweb';
+	public $type = 'gitssl';
 
 	public function show_type() {
-		return plugin_lang_get( 'gitweb' );
+		return plugin_lang_get( 'gitssl' );
 	}
 
 	public function show_changeset( $p_repo, $p_changeset ) {
@@ -43,7 +43,7 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 	}
 
 	private function uri_base( $p_repo ) {
-		$t_uri_base = $p_repo->info['gitweb_root'] . '?p=' . $p_repo->info['gitweb_project'] . ';';
+		$t_uri_base = $p_repo->info['gitssl_root'] . '?p=' . $p_repo->info['gitssl_project'] . ';';
 
 		return $t_uri_base;
 	}
@@ -67,15 +67,15 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 	}
 
 	public function update_repo_form( $p_repo ) {
-		$t_gitweb_root = null;
-		$t_gitweb_project = null;
+		$t_gitssl_root = null;
+		$t_gitssl_project = null;
 
-		if ( isset( $p_repo->info['gitweb_root'] ) ) {
-			$t_gitweb_root = $p_repo->info['gitweb_root'];
+		if ( isset( $p_repo->info['gitssl_root'] ) ) {
+			$t_gitssl_root = $p_repo->info['gitssl_root'];
 		}
 
-		if ( isset( $p_repo->info['gitweb_project'] ) ) {
-			$t_gitweb_project = $p_repo->info['gitweb_project'];
+		if ( isset( $p_repo->info['gitssl_project'] ) ) {
+			$t_gitssl_project = $p_repo->info['gitssl_project'];
 		}
 
 		if ( isset( $p_repo->info['master_branch'] ) ) {
@@ -85,12 +85,12 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 		}
 ?>
 <tr <?php echo helper_alternate_class() ?>>
-<td class="category"><?php echo plugin_lang_get( 'gitweb_root' ) ?></td>
-<td><input name="gitweb_root" maxlength="250" size="40" value="<?php echo string_attribute( $t_gitweb_root ) ?>"/></td>
+<td class="category"><?php echo plugin_lang_get( 'gitssl_root' ) ?></td>
+<td><input name="gitssl_root" maxlength="250" size="40" value="<?php echo string_attribute( $t_gitssl_root ) ?>"/></td>
 </tr>
 <tr <?php echo helper_alternate_class() ?>>
-<td class="category"><?php echo plugin_lang_get( 'gitweb_project' ) ?></td>
-<td><input name="gitweb_project" maxlength="250" size="40" value="<?php echo string_attribute( $t_gitweb_project ) ?>"/></td>
+<td class="category"><?php echo plugin_lang_get( 'gitssl_project' ) ?></td>
+<td><input name="gitssl_project" maxlength="250" size="40" value="<?php echo string_attribute( $t_gitssl_project ) ?>"/></td>
 </tr>
 <tr <?php echo helper_alternate_class() ?>>
 <td class="category"><?php echo plugin_lang_get( 'master_branch' ) ?></td>
@@ -100,12 +100,12 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 	}
 
 	public function update_repo( $p_repo ) {
-		$f_gitweb_root = gpc_get_string( 'gitweb_root' );
-		$f_gitweb_project = gpc_get_string( 'gitweb_project' );
+		$f_gitssl_root = gpc_get_string( 'gitssl_root' );
+		$f_gitssl_project = gpc_get_string( 'gitssl_project' );
 		$f_master_branch = gpc_get_string( 'master_branch' );
 
-		$p_repo->info['gitweb_root'] = $f_gitweb_root;
-		$p_repo->info['gitweb_project'] = $f_gitweb_project;
+		$p_repo->info['gitssl_root'] = $f_gitssl_root;
+		$p_repo->info['gitssl_project'] = $f_gitssl_project;
 		$p_repo->info['master_branch'] = $f_master_branch;
 
 		return $p_repo;
@@ -158,8 +158,8 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 
 			$t_branches_input_p1 = strpos( $t_branches_input, '<table class="heads">' );
 			$t_branches_input_p2 = strpos( $t_branches_input, '<div class="page_footer">' );
-			$t_gitweb_heads = substr( $t_branches_input, $t_branches_input_p1, $t_branches_input_p2 - $t_branches_input_p1 );
-			preg_match_all( '/<a class="list name".*>(.*)<\/a>/iU', $t_gitweb_heads, $t_matches, PREG_SET_ORDER );
+			$t_gitssl_heads = substr( $t_branches_input, $t_branches_input_p1, $t_branches_input_p2 - $t_branches_input_p1 );
+			preg_match_all( '/<a class="list name".*>(.*)<\/a>/iU', $t_gitssl_heads, $t_matches, PREG_SET_ORDER );
 
 			$t_branches = array();
 			foreach ($t_matches as $match)
@@ -258,7 +258,7 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 			var_dump( strlen( $t_input ), $t_input_p1, $t_input_p2 );
 			die();
 		}
-		$t_gitweb_data = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
+		$t_gitssl_data = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
 
 		$t_input_p1 = strpos( $t_input, '<table class="diff_tree">' );
 
@@ -272,10 +272,10 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 			var_dump( strlen( $t_input ), $t_input_p1, $t_input_p2 );
 			die();
 		}
-		$t_gitweb_files = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
+		$t_gitssl_files = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
 
 		# Get commit revsion and make sure it's not a dupe
-		preg_match( '#<tr><td>commit</td><td class="sha1">([a-f0-9]*)</td></tr>#', $t_gitweb_data, $t_matches );
+		preg_match( '#<tr><td>commit</td><td class="sha1">([a-f0-9]*)</td></tr>#', $t_gitssl_data, $t_matches );
 		$t_commit['revision'] = $t_matches[1];
 
 		echo "processing $t_commit[revision] ... ";
@@ -284,7 +284,7 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 			# Parse for commit data
 			preg_match( '#authored by ([^"]*).*?authored by ([^"]*).*?>([^<]*\d*:\d*:\d*[^(<]*)'
 					. '.*?committed by ([^"]*).*?committed by ([^"]*).*?page_body">(.*?)</div>#',
-				$t_gitweb_data, $t_matches );
+				$t_gitssl_data, $t_matches );
 			$t_commit['author'] = $t_matches[1];
 			$t_commit['author_email'] = $t_matches[2];
 			$t_commit['date'] = date( 'Y-m-d H:i:s', strtotime( $t_matches[3] ) );
@@ -293,7 +293,7 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 			$t_commit['message'] = trim( str_replace( '<br/>', PHP_EOL, $t_matches[6] ) );
 
 			$t_parents = array();
-			if ( preg_match_all( '#parent</td><td class="sha1"><[^>]*h=([0-9a-f]*)#', $t_gitweb_data, $t_matches ) ) {
+			if ( preg_match_all( '#parent</td><td class="sha1"><[^>]*h=([0-9a-f]*)#', $t_gitssl_data, $t_matches ) ) {
 				foreach( $t_matches[1] as $t_match ) {
 					$t_parents[] = $t_commit['parent'] = $t_match;
 				}
@@ -310,7 +310,7 @@ class SourceGitwebPlugin extends MantisSourcePlugin {
 			$t_commit['files'] = array();
 
 			preg_match_all( '#class="list".*?h=(\w*)[^>]*>([^<]*)</a>(?:(?:</td><td><span class="file_status|[^%]*%) (\w*))?#',
-				$t_gitweb_files, $t_matches, PREG_SET_ORDER );
+				$t_gitssl_files, $t_matches, PREG_SET_ORDER );
 
 			foreach( $t_matches as $t_file_matches ) {
 				$t_file = array();
