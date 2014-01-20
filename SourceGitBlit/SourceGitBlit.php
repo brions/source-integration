@@ -25,10 +25,10 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 		$this->url = 'https://github.com/brions/source-integration';
 	}
 
-	public $type = 'gitssl';
+	public $type = 'gitblit';
 
 	public function show_type() {
-		return plugin_lang_get( 'gitssl' );
+		return plugin_lang_get( 'gitblit' );
 	}
 
 	public function show_changeset( $p_repo, $p_changeset ) {
