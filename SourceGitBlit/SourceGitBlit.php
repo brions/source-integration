@@ -14,10 +14,10 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 		$this->name = plugin_lang_get( 'title' );
 		$this->description = plugin_lang_get( 'description' );
 
-		$this->version = '0.17';
+		$this->version = '0.1';
 		$this->requires = array(
-			'MantisCore' => '1.2.0',
-			'Source' => '0.16',
+			'MantisCore' => '1.2.16',
+			'Source' => '0.18',
 		);
 
 		$this->author = 'Brion Swanson';
@@ -43,7 +43,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 	}
 
 	private function uri_base( $p_repo ) {
-		$t_uri_base = $p_repo->info['gitssl_root'] . '?p=' . $p_repo->info['gitssl_project'] . ';';
+		$t_uri_base = $p_repo->info['gitblit_root'] . '?p=' . $p_repo->info['gitblit_project'] . ';';
 
 		return $t_uri_base;
 	}
@@ -67,15 +67,15 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 	}
 
 	public function update_repo_form( $p_repo ) {
-		$t_gitssl_root = null;
-		$t_gitssl_project = null;
+		$t_gitblit_root = null;
+		$t_gitblit_project = null;
 
-		if ( isset( $p_repo->info['gitssl_root'] ) ) {
-			$t_gitssl_root = $p_repo->info['gitssl_root'];
+		if ( isset( $p_repo->info['gitblit_root'] ) ) {
+			$t_gitblit_root = $p_repo->info['gitblit_root'];
 		}
 
-		if ( isset( $p_repo->info['gitssl_project'] ) ) {
-			$t_gitssl_project = $p_repo->info['gitssl_project'];
+		if ( isset( $p_repo->info['gitblit_project'] ) ) {
+			$t_gitblit_project = $p_repo->info['gitblit_project'];
 		}
 
 		if ( isset( $p_repo->info['master_branch'] ) ) {
@@ -85,12 +85,12 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 		}
 ?>
 <tr <?php echo helper_alternate_class() ?>>
-<td class="category"><?php echo plugin_lang_get( 'gitssl_root' ) ?></td>
-<td><input name="gitssl_root" maxlength="250" size="40" value="<?php echo string_attribute( $t_gitssl_root ) ?>"/></td>
+<td class="category"><?php echo plugin_lang_get( 'gitblit_root' ) ?></td>
+<td><input name="gitblit_root" maxlength="250" size="40" value="<?php echo string_attribute( $t_gitblit_root ) ?>"/></td>
 </tr>
 <tr <?php echo helper_alternate_class() ?>>
-<td class="category"><?php echo plugin_lang_get( 'gitssl_project' ) ?></td>
-<td><input name="gitssl_project" maxlength="250" size="40" value="<?php echo string_attribute( $t_gitssl_project ) ?>"/></td>
+<td class="category"><?php echo plugin_lang_get( 'gitblit_project' ) ?></td>
+<td><input name="gitblit_project" maxlength="250" size="40" value="<?php echo string_attribute( $t_gitblit_project ) ?>"/></td>
 </tr>
 <tr <?php echo helper_alternate_class() ?>>
 <td class="category"><?php echo plugin_lang_get( 'master_branch' ) ?></td>
@@ -100,12 +100,12 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 	}
 
 	public function update_repo( $p_repo ) {
-		$f_gitssl_root = gpc_get_string( 'gitssl_root' );
-		$f_gitssl_project = gpc_get_string( 'gitssl_project' );
+		$f_gitblit_root = gpc_get_string( 'gitblit_root' );
+		$f_gitblit_project = gpc_get_string( 'gitblit_project' );
 		$f_master_branch = gpc_get_string( 'master_branch' );
 
-		$p_repo->info['gitssl_root'] = $f_gitssl_root;
-		$p_repo->info['gitssl_project'] = $f_gitssl_project;
+		$p_repo->info['gitblit_root'] = $f_gitblit_root;
+		$p_repo->info['gitblit_project'] = $f_gitblit_project;
 		$p_repo->info['master_branch'] = $f_master_branch;
 
 		return $p_repo;
@@ -158,8 +158,8 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 
 			$t_branches_input_p1 = strpos( $t_branches_input, '<table class="heads">' );
 			$t_branches_input_p2 = strpos( $t_branches_input, '<div class="page_footer">' );
-			$t_gitssl_heads = substr( $t_branches_input, $t_branches_input_p1, $t_branches_input_p2 - $t_branches_input_p1 );
-			preg_match_all( '/<a class="list name".*>(.*)<\/a>/iU', $t_gitssl_heads, $t_matches, PREG_SET_ORDER );
+			$t_gitblit_heads = substr( $t_branches_input, $t_branches_input_p1, $t_branches_input_p2 - $t_branches_input_p1 );
+			preg_match_all( '/<a class="list name".*>(.*)<\/a>/iU', $t_gitblit_heads, $t_matches, PREG_SET_ORDER );
 
 			$t_branches = array();
 			foreach ($t_matches as $match)
@@ -258,7 +258,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 			var_dump( strlen( $t_input ), $t_input_p1, $t_input_p2 );
 			die();
 		}
-		$t_gitssl_data = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
+		$t_gitblit_data = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
 
 		$t_input_p1 = strpos( $t_input, '<table class="diff_tree">' );
 
@@ -272,10 +272,10 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 			var_dump( strlen( $t_input ), $t_input_p1, $t_input_p2 );
 			die();
 		}
-		$t_gitssl_files = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
+		$t_gitblit_files = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
 
 		# Get commit revsion and make sure it's not a dupe
-		preg_match( '#<tr><td>commit</td><td class="sha1">([a-f0-9]*)</td></tr>#', $t_gitssl_data, $t_matches );
+		preg_match( '#<tr><td>commit</td><td class="sha1">([a-f0-9]*)</td></tr>#', $t_gitblit_data, $t_matches );
 		$t_commit['revision'] = $t_matches[1];
 
 		echo "processing $t_commit[revision] ... ";
@@ -284,7 +284,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 			# Parse for commit data
 			preg_match( '#authored by ([^"]*).*?authored by ([^"]*).*?>([^<]*\d*:\d*:\d*[^(<]*)'
 					. '.*?committed by ([^"]*).*?committed by ([^"]*).*?page_body">(.*?)</div>#',
-				$t_gitssl_data, $t_matches );
+				$t_gitblit_data, $t_matches );
 			$t_commit['author'] = $t_matches[1];
 			$t_commit['author_email'] = $t_matches[2];
 			$t_commit['date'] = date( 'Y-m-d H:i:s', strtotime( $t_matches[3] ) );
@@ -293,7 +293,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 			$t_commit['message'] = trim( str_replace( '<br/>', PHP_EOL, $t_matches[6] ) );
 
 			$t_parents = array();
-			if ( preg_match_all( '#parent</td><td class="sha1"><[^>]*h=([0-9a-f]*)#', $t_gitssl_data, $t_matches ) ) {
+			if ( preg_match_all( '#parent</td><td class="sha1"><[^>]*h=([0-9a-f]*)#', $t_gitblit_data, $t_matches ) ) {
 				foreach( $t_matches[1] as $t_match ) {
 					$t_parents[] = $t_commit['parent'] = $t_match;
 				}
@@ -310,7 +310,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 			$t_commit['files'] = array();
 
 			preg_match_all( '#class="list".*?h=(\w*)[^>]*>([^<]*)</a>(?:(?:</td><td><span class="file_status|[^%]*%) (\w*))?#',
-				$t_gitssl_files, $t_matches, PREG_SET_ORDER );
+				$t_gitblit_files, $t_matches, PREG_SET_ORDER );
 
 			foreach( $t_matches as $t_file_matches ) {
 				$t_file = array();
