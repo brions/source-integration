@@ -18,6 +18,7 @@ plugins:
 
 * **SourceCgit**: Git repositories accessible via a 
   [cgit](http://hjemli.net/git/cgit/) web frontend installation.
+* **SourceGitBlit**: Git repositories accessible via a [GitBlit](http://gitblit.com/) frontend installation..
 * **SourceGithub**: Git repositories hosted on [GitHub](http://github.com/).
 * **SourceGitWeb**: Git repositories accessible via a 
   [GitWeb](https://git.wiki.kernel.org/index.php/Gitweb) web frontend 
