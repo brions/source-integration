@@ -43,27 +43,28 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 	}
 
 	private function uri_base( $p_repo ) {
-		$t_uri_base = $p_repo->info['gitblit_root'] . '?p=' . $p_repo->info['gitblit_project'] . ';';
+		$t_uri_base = $p_repo->info['gitblit_root'] . '/summary/' . $p_repo->info['gitblit_project'];	
 
 		return $t_uri_base;
 	}
 
 	public function url_repo( $p_repo, $t_changeset=null ) {
-		return $this->uri_base( $p_repo ) . ( $t_changeset ? 'h=' . $t_changeset->revision : '' );
+                if ( $t_changeset ) {
+			return str_replace( 'summary', 'commit', $this->uri_base( $p_repo ) ) . '/' . $t_changeset->revision;
+		}
+		return $this->uri_base( $p_repo );
 	}
 
 	public function url_changeset( $p_repo, $p_changeset ) {
-		return $this->uri_base( $p_repo ) . 'a=commitdiff;h=' . $p_changeset->revision;
+		return str_replace( 'commit', 'commitdiff', $this->url_repo( $p_repo, $p_changeset );
 	}
 
 	public function url_file( $p_repo, $p_changeset, $p_file ) {
-		return $this->uri_base( $p_repo ) . 'a=blob;f=' . $p_file->filename .
-			';h=' . $p_file->revision . ';hb=' . $p_changeset->revision;
+		return str_replace( 'summary', 'blob', $this->uri_repo( $p_repo, $p_changeset ) ) . '/' . $p_file->filename;
 	}
 
 	public function url_diff( $p_repo, $p_changeset, $p_file ) {
-		return $this->uri_base( $p_repo ) . 'a=blobdiff;f=' . $p_file->filename .
-			';h=' . $p_file->revision . ';hb=' . $p_changeset->revision . ';hpb=' . $p_changeset->parent;
+		return str_replace( 'blob', 'blobdiff', $this->url_file( $p_repo, $p_changeset, $p_file );
 	}
 
 	public function update_repo_form( $p_repo ) {
