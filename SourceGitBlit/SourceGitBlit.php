@@ -115,28 +115,29 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 	public function precommit( ) {
 		# We're expecting a JSON payload in the form:
 		#
-		# "payload":[ 
-		#		"source":"gitblit", 
-		#		"commits":[
-		#			"commit": [
-		#				"author":[
-		#					"email":$authorEmail,
-		#					"name":$authorName
+		# payload="payload:[ 
+		#		source:"gitblit", 
+		#		commits:[
+		#			commit: [
+		#				author:[
+		#					email:$authorEmail,
+		#					name:$authorName
 		#				],
-		#			    "committer":[
-		#					"email":$committerEmail,
-		#					"name":$committerName
+		#			    committer:[
+		#					email:$committerEmail,
+		#					name:$committerName
 		#				],
-		#				"added":[$addedFilePaths],
-		#				"modified":[$modifiedFilePaths],
-		#				"removed":[$deletedFilePaths],
-		#				"id":$commitId,
-		#				"branch":$commitBranch,
-		#				"url":$commitUrl,
-		#				"message":$commitMessage
+		#				added:[$addedFilePaths],
+		#				modified:[$modifiedFilePaths],
+		#				removed:[$deletedFilePaths],
+		#				id:$commitId,
+		#				branch:$commitBranch,
+		#				project:$repoName,
+		#				url:$commitUrl,
+		#				message:$commitMessage
 		#			]						    
 		#		]
-		#	]
+		#	]"
 		#
 		# So first check to make sure we have a payload and a source of 'gitblit'
 		 
@@ -151,7 +152,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 		# decode the json object into a normal associative array
 		$t_data = json_decode( $f_payload, true );
-		$t_reponame = $t_data['repository']['name'];
+		$t_reponame = $t_data['project'];
 
 		$t_repo_table = plugin_table( 'repository', 'Source' );
 
