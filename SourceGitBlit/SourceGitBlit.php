@@ -9,7 +9,7 @@ if ( false === include_once( config_get( 'plugin_path' ) . 'Source/MantisSourceP
 
 require_once( config_get( 'core_path' ) . 'url_api.php' );
 
-class SourceGitSSLPlugin extends MantisSourcePlugin {
+class SourceGitBlitPlugin extends MantisSourcePlugin {
 	public function register() {
 		$this->name = plugin_lang_get( 'title' );
 		$this->description = plugin_lang_get( 'description' );
@@ -56,7 +56,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 	}
 
 	public function url_changeset( $p_repo, $p_changeset ) {
-		return str_replace( 'commit', 'commitdiff', $this->url_repo( $p_repo, $p_changeset );
+		return str_replace( 'commit', 'commitdiff', $this->url_repo( $p_repo, $p_changeset ) );
 	}
 
 	public function url_file( $p_repo, $p_changeset, $p_file ) {
@@ -64,7 +64,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 	}
 
 	public function url_diff( $p_repo, $p_changeset, $p_file ) {
-		return str_replace( 'blob', 'blobdiff', $this->url_file( $p_repo, $p_changeset, $p_file );
+		return str_replace( 'blob', 'blobdiff', $this->url_file( $p_repo, $p_changeset, $p_file ) );
 	}
 
 	public function update_repo_form( $p_repo ) {
@@ -113,9 +113,65 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 	}
 
 	public function precommit( ) {
-		# TODO: Implement real commit sequence.
-		return;
-	}
+		# We're expecting a JSON payload in the form:
+		#
+		# "payload":[ 
+		#		"source":"gitblit", 
+		#		"commits":[
+		#			"commit": [
+		#				"author":[
+		#					"email":$authorEmail,
+		#					"name":$authorName
+		#				],
+		#			    "committer":[
+		#					"email":$committerEmail,
+		#					"name":$committerName
+		#				],
+		#				"added":[$addedFilePaths],
+		#				"modified":[$modifiedFilePaths],
+		#				"removed":[$deletedFilePaths],
+		#				"id":$commitId,
+		#				"branch":$commitBranch,
+		#				"url":$commitUrl,
+		#				"message":$commitMessage
+		#			]						    
+		#		]
+		#	]
+		#
+		# So first check to make sure we have a payload and a source of 'gitblit'
+		 
+		$f_payload = gpc_get_string( 'payload', null );
+		if ( is_null( $f_payload ) ) {
+			return;
+		}
+
+		if ( false === stripos( $f_payload, 'gitblit' ) ) {
+			return;
+		}
+
+		# decode the json object into a normal associative array
+		$t_data = json_decode( $f_payload, true );
+		$t_reponame = $t_data['repository']['name'];
+
+		$t_repo_table = plugin_table( 'repository', 'Source' );
+
+		$t_query = "SELECT * FROM $t_repo_table WHERE info LIKE " . db_param();
+		$t_result = db_query_bound( $t_query, array( '%' . $t_reponame . '%' ) );
+
+		if ( db_num_rows( $t_result ) < 1 ) {
+			return;
+		}
+
+		while ( $t_row = db_fetch_array( $t_result ) ) {
+			$t_repo = new SourceRepo( $t_row['type'], $t_row['name'], $t_row['url'], $t_row['info'] );
+			$t_repo->id = $t_row['id'];
+
+			if ( $t_repo->info['hub_reponame'] == $t_reponame ) {
+				return array( 'repo' => $t_repo, 'data' => $t_data );
+			}
+		}
+
+		return;	}
 
 	public function commit( $p_repo, $p_data ) {
 		# Handle branch names with '+' character
@@ -152,25 +208,25 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 		}
 		else
 		{
-			$t_heads_url = $this->uri_base( $p_repo ) . 'a=heads';
-			$t_branches_input = url_get( $t_heads_url );
+// 			$t_heads_url = $this->uri_base( $p_repo ) . 'a=heads';
+// 			$t_branches_input = url_get( $t_heads_url );
 
-			$t_branches_input = str_replace( array("\r", "\n", '&lt;', '&gt;', '&nbsp;'), array('', '', '<', '>', ' '), $t_branches_input );
+// 			$t_branches_input = str_replace( array("\r", "\n", '&lt;', '&gt;', '&nbsp;'), array('', '', '<', '>', ' '), $t_branches_input );
 
-			$t_branches_input_p1 = strpos( $t_branches_input, '<table class="heads">' );
-			$t_branches_input_p2 = strpos( $t_branches_input, '<div class="page_footer">' );
-			$t_gitblit_heads = substr( $t_branches_input, $t_branches_input_p1, $t_branches_input_p2 - $t_branches_input_p1 );
-			preg_match_all( '/<a class="list name".*>(.*)<\/a>/iU', $t_gitblit_heads, $t_matches, PREG_SET_ORDER );
+// 			$t_branches_input_p1 = strpos( $t_branches_input, '<table class="heads">' );
+// 			$t_branches_input_p2 = strpos( $t_branches_input, '<div class="page_footer">' );
+// 			$t_gitblit_heads = substr( $t_branches_input, $t_branches_input_p1, $t_branches_input_p2 - $t_branches_input_p1 );
+// 			preg_match_all( '/<a class="list name".*>(.*)<\/a>/iU', $t_gitblit_heads, $t_matches, PREG_SET_ORDER );
 
-			$t_branches = array();
-			foreach ($t_matches as $match)
-			{
-				$t_branch = trim($match[1]);
-				if ($match[1] != 'origin' and !in_array($t_branch,$t_branches))
-				{
-					$t_branches[] = $t_branch;
-				}
-			}
+// 			$t_branches = array();
+// 			foreach ($t_matches as $match)
+// 			{
+// 				$t_branch = trim($match[1]);
+// 				if ($match[1] != 'origin' and !in_array($t_branch,$t_branches))
+// 				{
+// 					$t_branches[] = $t_branch;
+// 				}
+// 			}
 		}
 
 		$t_changesets = array();
@@ -207,7 +263,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 	}
 
 	private function import_commits( $p_repo, $p_uri_base, $p_commit_ids, $p_branch='' ) {
-		static $s_parents = array();
+/* 		static $s_parents = array();
 		static $s_counter = 0;
 
 		if ( is_array( $p_commit_ids ) ) {
@@ -245,10 +301,11 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 
 		$s_counter = 0;
 		return $t_changesets;
+*/
 	}
 
 	private function commit_changeset( $p_repo, $p_input, $p_branch='' ) {
-
+/*
 		$t_input = str_replace( array("\r", "\n", '&lt;', '&gt;', '&nbsp;'), array('', '', '<', '>', ' '), $p_input );
 
 		# Exract sections of commit data and changed files
@@ -352,6 +409,7 @@ class SourceGitSSLPlugin extends MantisSourcePlugin {
 		} else {
 			echo "already exists.\n";
 			return array( null, array() );
-		}
+		} 
+*/
 	}
 }
