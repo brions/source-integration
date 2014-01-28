@@ -156,15 +156,17 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		}
 
 		# decode the json object into a normal associative array
-		$t_data = json_decode( $f_payload, true );
+		$t_data = json_decode( $f_payload );
 		$t_reponame = $t_data->repo->name;
-
+				
 		$t_repo_table = plugin_table( 'repository', 'Source' );
 
 		$t_query = "SELECT * FROM $t_repo_table WHERE info LIKE " . db_param();
 		$t_result = db_query_bound( $t_query, array( '%' . $t_reponame . '%' ) );
 
 		if ( db_num_rows( $t_result ) < 1 ) {
+			echo "didn't find any repository for " . $t_reponame . ".\n";
+		
 			return;
 		}
 
@@ -242,7 +244,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 			if ( db_num_rows( $t_result ) > 0 ) {
 				$t_parent = db_result( $t_result );
-				echo "Oldest '$t_branch' branch parent: '$t_parent'\n";
+// 				echo "Oldest '$t_branch' branch parent: '$t_parent'\n";
 
 				if ( !empty( $t_parent ) ) {
 					$t_commits[] = $t_parent;
@@ -261,12 +263,13 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		return $this->import_full( $p_repo );
 	}
 
-	private function import_commits( $p_repo, $p_uri_base, $p_commit_ids, $p_branch='', $p_data=null ) {
+	private function import_commits( $p_repo, $p_commit_ids, $p_branch='', $p_data=null ) {
 		static $s_parents = array();
 		static $s_counter = 0;
 
 		$t_reponame = $p_repo->info['gitblit_project'];
 
+		var_dump($p_commit_ids);
 		if ( is_array( $p_commit_ids ) ) {
 			$s_parents = array_merge( $s_parents, $p_commit_ids );
 		} else {
@@ -274,15 +277,11 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		}
 
 		$t_changesets = array();
-		$t_commits = array();
-		if ($p_data != null) {
-			$t_commits = $p_data->commits;
-		}
 
 		while( count( $s_parents ) > 0 && $s_counter < 200 ) {
 			$t_commit_id = array_shift( $s_parents );
 
-			echo "Verifying $t_commit_id ... ";
+// 			echo "Verifying $t_commit_id ... ";
 			if ($p_data == null) {
 				# what to do?  call out to GitBlit and try to scrape the info from the RSS feed?
 				# fail for now...
@@ -290,7 +289,11 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 				continue;
 			} else {
 				// get the commit data for the commit we're working with - the commit ids are unique
-				$t_commit_data = $t_commits[array_search($t_commit_id, $t_commits, true)];
+				foreach ($p_data->commits as $t_commit) {
+					if ($t_commit->id == $t_commit_id) {
+						$t_commit_data = $t_commit;
+					}
+				}
 				
 				if ( !property_exists( $t_commit_data, 'id' ) ) {
 					echo "failed ($t_commit_data->message).\n";
@@ -312,17 +315,14 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 	private function json_commit_changeset( $p_repo, $p_json, $p_branch='' ) {
 
-		echo "Processing $p_json->id ... ";
 		if ( !SourceChangeset::exists( $p_repo->id, $p_json->id ) ) {
 			$t_parents = array();
 
-			# note: we don't have timestamps yet because gitblit only provide time as an integer in seconds
-			# from the epoch (wtf?)
 			$t_changeset = new SourceChangeset(
 				$p_repo->id,
 				$p_json->id,
 				$p_branch,
-				null,
+				$p_json->date,
 				$p_json->author->name,
 				$p_json->message
 			);
@@ -351,7 +351,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 			$t_changeset->save();
 
-			echo "saved.\n";
+// 			echo "saved.\n";
 			return array( $t_changeset, $t_parents );
 		} else {
 			echo "already exists.\n";
