@@ -115,15 +115,22 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 	public function precommit( ) {
 		# We're expecting a JSON payload in the form:
 		#
-		# payload="payload:[ 
-		#		source:"gitblit", 
+		# payload="payload:[
+		#		source:"gitblit",
+		#		before:$headIdBeforeReceive,
+		#		after:$headIdAfterReceive,
+		#		ref:$commitBranch,
+		#		repo:[
+		#			name:$repoName,
+		#			url:$repoUrl
+		#		],
 		#		commits:[
 		#			commit: [
 		#				author:[
 		#					email:$authorEmail,
 		#					name:$authorName
 		#				],
-		#			    committer:[
+		#				committer:[
 		#					email:$committerEmail,
 		#					name:$committerName
 		#				],
@@ -131,11 +138,9 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		#				modified:[$modifiedFilePaths],
 		#				removed:[$deletedFilePaths],
 		#				id:$commitId,
-		#				branch:$commitBranch,
-		#				project:$repoName,
 		#				url:$commitUrl,
 		#				message:$commitMessage
-		#			]						    
+		#			]
 		#		]
 		#	]"
 		#
@@ -152,7 +157,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 		# decode the json object into a normal associative array
 		$t_data = json_decode( $f_payload, true );
-		$t_reponame = $t_data['project'];
+		$t_reponame = $t_data->repo->name;
 
 		$t_repo_table = plugin_table( 'repository', 'Source' );
 
@@ -167,32 +172,25 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 			$t_repo = new SourceRepo( $t_row['type'], $t_row['name'], $t_row['url'], $t_row['info'] );
 			$t_repo->id = $t_row['id'];
 
-			if ( $t_repo->info['hub_reponame'] == $t_reponame ) {
+			if ( $t_repo->info['gitblit_project'] == $t_reponame ) {
 				return array( 'repo' => $t_repo, 'data' => $t_data );
 			}
 		}
 
-		return;	}
+		return;	
+	}
 
 	public function commit( $p_repo, $p_data ) {
-		# Handle branch names with '+' character
-		$p_data = str_replace('_plus_', '+', $p_data);
+		$t_commits = array();
 
-		# The -d option from curl requires you to encode your own data.
-		# Once it reaches here it is decoded. Hence we split by a space
-		# were as the curl command uses a '+' character instead.
-		# i.e. DATA=`echo $INPUT | sed -e 's/ /+/g'`
-		list ( , $t_commit_id, $t_branch) = explode(' ', $p_data);
-		list ( , , $t_branch) = explode('/', $t_branch, 3);
-
-		# master_branch contains comma-separated list of branches
-		$t_branches = explode(',', $p_repo->info['master_branch']);
-		if (!in_array('*', $t_branches) and !in_array($t_branch, $t_branches))
-		{
-			return;
+		foreach( $p_data->commits as $t_commit ) {
+			$t_commits[] = $t_commit->id;
 		}
 
-		return $this->import_commits($p_repo, null, $t_commit_id, $t_branch);
+		$t_refData = split('/',$p_data->ref);
+		$t_branch = $t_refData[2];
+
+		return $this->import_commits( $p_repo, $t_commits, $t_branch, $p_data );
 	}
 
 	public function import_full( $p_repo ) {
@@ -263,9 +261,11 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		return $this->import_full( $p_repo );
 	}
 
-	private function import_commits( $p_repo, $p_uri_base, $p_commit_ids, $p_branch='' ) {
-/* 		static $s_parents = array();
+	private function import_commits( $p_repo, $p_uri_base, $p_commit_ids, $p_branch='', $p_data=null ) {
+		static $s_parents = array();
 		static $s_counter = 0;
+
+		$t_reponame = $p_repo->info['gitblit_project'];
 
 		if ( is_array( $p_commit_ids ) ) {
 			$s_parents = array_merge( $s_parents, $p_commit_ids );
@@ -274,133 +274,79 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		}
 
 		$t_changesets = array();
+		$t_commits = array();
+		if ($p_data != null) {
+			$t_commits = $p_data->commits;
+		}
 
 		while( count( $s_parents ) > 0 && $s_counter < 200 ) {
 			$t_commit_id = array_shift( $s_parents );
 
-			echo "Retrieving $t_commit_id ... ";
-
-			# Handle branch names with '+' character
-			$t_fixed_id = str_replace('+', '%2B', $t_commit_id);
-			$t_commit_url = $this->uri_base( $p_repo ) . 'a=commit;h=' . $t_fixed_id;
-			$t_input = url_get( $t_commit_url );
-
-			if ( false === $t_input ) {
+			echo "Verifying $t_commit_id ... ";
+			if ($p_data == null) {
+				# what to do?  call out to GitBlit and try to scrape the info from the RSS feed?
+				# fail for now...
 				echo "failed.\n";
-				echo "$t_commit_url\n"; # DEBUG
 				continue;
-			}
+			} else {
+				// get the commit data for the commit we're working with - the commit ids are unique
+				$t_commit_data = $t_commits[array_search($t_commit_id, $t_commits, true)];
+				
+				if ( !property_exists( $t_commit_data, 'id' ) ) {
+					echo "failed ($t_commit_data->message).\n";
+					continue;
+				}
+	
+				list( $t_changeset, $t_commit_parents ) = $this->json_commit_changeset( $p_repo, $t_commit_data, $p_branch );
+				if ( $t_changeset ) {
+					$t_changesets[] = $t_changeset;
+				}
 
-			list( $t_changeset, $t_commit_parents ) = $this->commit_changeset( $p_repo, $t_input, $p_branch );
-			if ( !is_null( $t_changeset ) ) {
-				$t_changesets[] = $t_changeset;
+				$s_parents = array_merge( $s_parents, $t_commit_parents );
 			}
-
-			$s_parents = array_merge( $s_parents, $t_commit_parents );
-			$s_counter += 1;
 		}
 
 		$s_counter = 0;
 		return $t_changesets;
-*/
 	}
 
-	private function commit_changeset( $p_repo, $p_input, $p_branch='' ) {
-/*
-		$t_input = str_replace( array("\r", "\n", '&lt;', '&gt;', '&nbsp;'), array('', '', '<', '>', ' '), $p_input );
+	private function json_commit_changeset( $p_repo, $p_json, $p_branch='' ) {
 
-		# Exract sections of commit data and changed files
-		$t_input_p1 = strpos( $t_input, '<div class="title_text">' );
-		$t_input_p2 = strpos( $t_input, '<div class="list_head">' );
-		if ( false === $t_input_p1 || false === $t_input_p2 ) {
-			echo 'commit data failure.';
-			var_dump( strlen( $t_input ), $t_input_p1, $t_input_p2 );
-			die();
-		}
-		$t_gitblit_data = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
-
-		$t_input_p1 = strpos( $t_input, '<table class="diff_tree">' );
-
-		if ( false === $t_input_p1) {
-			$t_input_p1 = strpos( $t_input, '<table class="combined diff_tree">' );
-		}
-
-		$t_input_p2 = strpos( $t_input, '<div class="page_footer">' );
-		if ( false === $t_input_p1 || false === $t_input_p2 ) {
-			echo 'file data failure.';
-			var_dump( strlen( $t_input ), $t_input_p1, $t_input_p2 );
-			die();
-		}
-		$t_gitblit_files = substr( $t_input, $t_input_p1, $t_input_p2 - $t_input_p1 );
-
-		# Get commit revsion and make sure it's not a dupe
-		preg_match( '#<tr><td>commit</td><td class="sha1">([a-f0-9]*)</td></tr>#', $t_gitblit_data, $t_matches );
-		$t_commit['revision'] = $t_matches[1];
-
-		echo "processing $t_commit[revision] ... ";
-		if ( !SourceChangeset::exists( $p_repo->id, $t_commit['revision'] ) ) {
-
-			# Parse for commit data
-			preg_match( '#authored by ([^"]*).*?authored by ([^"]*).*?>([^<]*\d*:\d*:\d*[^(<]*)'
-					. '.*?committed by ([^"]*).*?committed by ([^"]*).*?page_body">(.*?)</div>#',
-				$t_gitblit_data, $t_matches );
-			$t_commit['author'] = $t_matches[1];
-			$t_commit['author_email'] = $t_matches[2];
-			$t_commit['date'] = date( 'Y-m-d H:i:s', strtotime( $t_matches[3] ) );
-			$t_commit['committer'] = $t_matches[4];
-			$t_commit['committer_email'] = $t_matches[5];
-			$t_commit['message'] = trim( str_replace( '<br/>', PHP_EOL, $t_matches[6] ) );
-
+		echo "Processing $p_json->id ... ";
+		if ( !SourceChangeset::exists( $p_repo->id, $p_json->id ) ) {
 			$t_parents = array();
-			if ( preg_match_all( '#parent</td><td class="sha1"><[^>]*h=([0-9a-f]*)#', $t_gitblit_data, $t_matches ) ) {
-				foreach( $t_matches[1] as $t_match ) {
-					$t_parents[] = $t_commit['parent'] = $t_match;
+
+			# note: we don't have timestamps yet because gitblit only provide time as an integer in seconds
+			# from the epoch (wtf?)
+			$t_changeset = new SourceChangeset(
+				$p_repo->id,
+				$p_json->id,
+				$p_branch,
+				null,
+				$p_json->author->name,
+				$p_json->message
+			);
+
+			# we don't have parent info at this time
+			$t_changeset->parent = '';
+			$t_changeset->author_email = $p_json->author->email;
+			$t_changeset->committer = $p_json->committer->name;
+			$t_changeset->committer_email = $p_json->committer->email;
+
+			if ( isset( $p_json->added ) ) {
+				foreach ( $p_json->added as $t_file ) {
+					$t_changeset->files[] = new SourceFile( 0, '', $t_file, 'add' );
 				}
 			}
-
-			# Strip ref links and signoff spans from commit message
-			$t_commit['message'] = preg_replace( array( '#<a[^>]*>([^<]*)</a>#', '#<span[^>]*>(.*?)</span>#' ),
-				'$1', $t_commit['message'] );
-
-			# Prepend a # sign to mantis number
-			$t_commit['message'] = preg_replace( '#(mantis)\s+(\d+)#i', '$1 #$2',$t_commit['message'] );
-
-			# Parse for changed file data
-			$t_commit['files'] = array();
-
-			preg_match_all( '#class="list".*?h=(\w*)[^>]*>([^<]*)</a>(?:(?:</td><td><span class="file_status|[^%]*%) (\w*))?#',
-				$t_gitblit_files, $t_matches, PREG_SET_ORDER );
-
-			foreach( $t_matches as $t_file_matches ) {
-				$t_file = array();
-				$t_file['filename'] = $t_file_matches[2];
-				$t_file['revision'] = $t_file_matches[1];
-
-				if ( isset( $t_file_matches[3] ) ) {
-					if ( $t_file_matches[3] == 'new' or $t_file_matches[3] == 'moved' ) {
-						$t_file['action'] = 'add';
-					} else if ( $t_file_matches[3] == 'deleted' or $t_file_matches[3] == 'similarity' ) {
-						$t_file['action'] = 'rm';
-					} else {
-						$t_file['action'] = 'mod';
-					}
-				} else {
-					$t_file['action'] = 'mod';
+			if ( isset( $p_json->modified ) ) {
+				foreach ( $p_json->modified as $t_file ) {
+					$t_changeset->files[] = new SourceFile( 0, '', $t_file, 'mod' );
 				}
-
-				$t_commit['files'][] = $t_file;
 			}
-
-			$t_changeset = new SourceChangeset( $p_repo->id, $t_commit['revision'], $p_branch,
-				$t_commit['date'], $t_commit['author'], $t_commit['message'], 0,
-				( isset( $t_commit['parent'] ) ? $t_commit['parent'] : '' ) );
-
-			$t_changeset->author_email = $t_commit['author_email'];
-			$t_changeset->committer = $t_commit['committer'];
-			$t_changeset->committer_email = $t_commit['committer_email'];
-
-			foreach( $t_commit['files'] as $t_file ) {
-				$t_changeset->files[] = new SourceFile( 0, $t_file['revision'], $t_file['filename'], $t_file['action'] );
+			if ( isset( $p_json->removed ) ) {
+				foreach ( $p_json->removed as $t_file ) {
+					$t_changeset->files[] = new SourceFile( 0, '', $t_file, 'rm' );
+				}
 			}
 
 			$t_changeset->save();
@@ -410,7 +356,6 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		} else {
 			echo "already exists.\n";
 			return array( null, array() );
-		} 
-*/
+		}
 	}
 }
