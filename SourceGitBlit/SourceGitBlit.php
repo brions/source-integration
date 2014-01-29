@@ -43,7 +43,8 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 	}
 
 	private function uri_base( $p_repo ) {
-		$t_uri_base = $p_repo->info['gitblit_root'] . '/summary/' . $p_repo->info['gitblit_project'];	
+		$t_uri_base = rtrim($p_repo->info['gitblit_root'], '/');
+		$t_uri_base = $t_uri_base . '/summary/' . $p_repo->info['gitblit_project'];	
 
 		return $t_uri_base;
 	}
@@ -115,34 +116,36 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 	public function precommit( ) {
 		# We're expecting a JSON payload in the form:
 		#
-		# payload="payload:[
+		# payload="payload:{
 		#		source:"gitblit",
 		#		before:$headIdBeforeReceive,
 		#		after:$headIdAfterReceive,
 		#		ref:$commitBranch,
-		#		repo:[
+		#		repo:{
 		#			name:$repoName,
 		#			url:$repoUrl
-		#		],
+		#		{,
 		#		commits:[
-		#			commit: [
-		#				author:[
+		#			{
+		#				author:{
 		#					email:$authorEmail,
 		#					name:$authorName
-		#				],
-		#				committer:[
+		#				},
+		#				committer:{
 		#					email:$committerEmail,
 		#					name:$committerName
-		#				],
+		#				},
+		#				date:$dateInSeconds,
 		#				added:[$addedFilePaths],
 		#				modified:[$modifiedFilePaths],
 		#				removed:[$deletedFilePaths],
 		#				id:$commitId,
+		#               parents:[$parentIds],
 		#				url:$commitUrl,
 		#				message:$commitMessage
-		#			]
+		#			}
 		#		]
-		#	]"
+		#	}"
 		#
 		# So first check to make sure we have a payload and a source of 'gitblit'
 		 
@@ -157,6 +160,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 		# decode the json object into a normal associative array
 		$t_data = json_decode( $f_payload );
+		
 		$t_reponame = $t_data->repo->name;
 				
 		$t_repo_table = plugin_table( 'repository', 'Source' );
@@ -209,27 +213,10 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		}
 		else
 		{
-// 			$t_heads_url = $this->uri_base( $p_repo ) . 'a=heads';
-// 			$t_branches_input = url_get( $t_heads_url );
-
-// 			$t_branches_input = str_replace( array("\r", "\n", '&lt;', '&gt;', '&nbsp;'), array('', '', '<', '>', ' '), $t_branches_input );
-
-// 			$t_branches_input_p1 = strpos( $t_branches_input, '<table class="heads">' );
-// 			$t_branches_input_p2 = strpos( $t_branches_input, '<div class="page_footer">' );
-// 			$t_gitblit_heads = substr( $t_branches_input, $t_branches_input_p1, $t_branches_input_p2 - $t_branches_input_p1 );
-// 			preg_match_all( '/<a class="list name".*>(.*)<\/a>/iU', $t_gitblit_heads, $t_matches, PREG_SET_ORDER );
-
-// 			$t_branches = array();
-// 			foreach ($t_matches as $match)
-// 			{
-// 				$t_branch = trim($match[1]);
-// 				if ($match[1] != 'origin' and !in_array($t_branch,$t_branches))
-// 				{
-// 					$t_branches[] = $t_branch;
-// 				}
-// 			}
+			// we have no way of getting branch names if not provided
+			echo "You must specify one or more master_branch values in the repo configuration.\n";
+			die("import full failed.");
 		}
-
 		$t_changesets = array();
 
 		$t_changeset_table = plugin_table( 'changeset', 'Source' );
@@ -244,14 +231,14 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 			if ( db_num_rows( $t_result ) > 0 ) {
 				$t_parent = db_result( $t_result );
-// 				echo "Oldest '$t_branch' branch parent: '$t_parent'\n";
+				echo "Oldest '$t_branch' branch parent: '$t_parent'\n";
 
 				if ( !empty( $t_parent ) ) {
 					$t_commits[] = $t_parent;
 				}
 			}
 
-			$t_changesets = array_merge( $t_changesets, $this->import_commits( $p_repo, $this->uri_base( $p_repo ), $t_commits, $t_branch  ) );
+			$t_changesets = array_merge( $t_changesets, $this->import_commits( $p_repo, $t_commits, $t_branch ) );
 		}
 
 		echo '</pre>';
@@ -263,13 +250,10 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		return $this->import_full( $p_repo );
 	}
 
-	private function import_commits( $p_repo, $p_commit_ids, $p_branch='', $p_data=null ) {
+	public function import_commits( $p_repo, $p_commit_ids, $p_branch='', $p_data=null ) {
 		static $s_parents = array();
 		static $s_counter = 0;
 
-		$t_reponame = $p_repo->info['gitblit_project'];
-
-		var_dump($p_commit_ids);
 		if ( is_array( $p_commit_ids ) ) {
 			$s_parents = array_merge( $s_parents, $p_commit_ids );
 		} else {
@@ -285,13 +269,14 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 			if ($p_data == null) {
 				# what to do?  call out to GitBlit and try to scrape the info from the RSS feed?
 				# fail for now...
-				echo "failed.\n";
-				continue;
+				echo "failed to import commits.\n";
+				return array();
 			} else {
 				// get the commit data for the commit we're working with - the commit ids are unique
-				foreach ($p_data->commits as $t_commit) {
+				foreach (((array)$p_data->commits) as $t_commit) {
 					if ($t_commit->id == $t_commit_id) {
 						$t_commit_data = $t_commit;
+						break;
 					}
 				}
 				
@@ -322,13 +307,16 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 				$p_repo->id,
 				$p_json->id,
 				$p_branch,
-				$p_json->date,
+				date( 'Y-m-d H:i:s', $p_json->date),
 				$p_json->author->name,
 				$p_json->message
 			);
 
-			# we don't have parent info at this time
-			$t_changeset->parent = '';
+			if ( count( $p_json->parents ) > 0) {
+				$t_parent = $p_json->parents[0];
+				$t_changeset->parent = $t_parent;
+			}
+			
 			$t_changeset->author_email = $p_json->author->email;
 			$t_changeset->committer = $p_json->committer->name;
 			$t_changeset->committer_email = $p_json->committer->email;
