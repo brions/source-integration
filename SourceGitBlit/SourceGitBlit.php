@@ -16,7 +16,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 		$this->version = '0.1';
 		$this->requires = array(
-			'MantisCore' => '1.2.16',
+			'MantisCore' => '1.2.17',
 			'Source' => '0.18',
 		);
 
@@ -42,9 +42,14 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		return  "$p_file->action - $p_file->filename";
 	}
 
+        private function unslash( $p_name ) {
+		return str_replace( '/', '%2F', $p_name );
+	}
+
 	private function uri_base( $p_repo ) {
 		$t_uri_base = rtrim($p_repo->info['gitblit_root'], '/');
-		$t_uri_base = $t_uri_base . '/summary/' . $p_repo->info['gitblit_project'];	
+		$project_name = $this->unslash( $p_repo->info['gitblit_project'] );
+		$t_uri_base = $t_uri_base . '/summary/' . $project_name;
 
 		return $t_uri_base;
 	}
@@ -60,8 +65,11 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		return str_replace( 'commit', 'commitdiff', $this->url_repo( $p_repo, $p_changeset ) );
 	}
 
-	public function url_file( $p_repo, $p_changeset, $p_file ) {
-		return str_replace( 'summary', 'blob', $this->uri_repo( $p_repo, $p_changeset ) ) . '/' . $p_file->filename;
+	public function url_file( $p_repo, $p_changeset=null, $p_file ) {
+		if ( $p_changeset ) {
+			return str_replace( 'commit', 'blob', $this->url_repo( $p_repo, $p_changeset ) ) . '/' . $this->unslash($p_file->filename);
+ 		}
+		return str_replace( 'summary', 'blob', $this->url_repo( $p_repo, $p_changeset ) ) . '/' . $this->unslash($p_file->filename);
 	}
 
 	public function url_diff( $p_repo, $p_changeset, $p_file ) {
@@ -116,7 +124,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 	public function precommit( ) {
 		# We're expecting a JSON payload in the form:
 		#
-		# payload="payload:{
+		# payload="{
 		#		source:"gitblit",
 		#		before:$headIdBeforeReceive,
 		#		after:$headIdAfterReceive,
@@ -124,7 +132,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 		#		repo:{
 		#			name:$repoName,
 		#			url:$repoUrl
-		#		{,
+		#		},
 		#		commits:[
 		#			{
 		#				author:{
@@ -154,6 +162,7 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 			return;
 		}
 
+		$pos = stripos( $f_payload, 'gitblit' );
 		if ( false === stripos( $f_payload, 'gitblit' ) ) {
 			return;
 		}
@@ -170,7 +179,6 @@ class SourceGitBlitPlugin extends MantisSourcePlugin {
 
 		if ( db_num_rows( $t_result ) < 1 ) {
 			echo "didn't find any repository for " . $t_reponame . ".\n";
-		
 			return;
 		}
 
